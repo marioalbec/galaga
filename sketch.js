@@ -1,28 +1,33 @@
 // Variables globales
 let nave;
 let disparos = [];
+let disparosEnemigos = [];
 let enemigos = [];
 let puntaje = 0;
 let vidas = 3;
 let nivel = 1;
+let jefeGenerado = false;
 let juegoTerminado = false;
 let mostrandoTransicion = false;
 let tiempoTransicion = 0;
+let top5 = [];
 
 function setup() {
   createCanvas(600, 800);
   nave = new Nave();
-  generarEnemigosNivel1();
+  cargarTop5();
+  iniciarNivel(nivel);
 }
 
 function draw() {
   background(0);
 
   if (!juegoTerminado && !mostrandoTransicion) {
+    // Mostrar y mover nave
     nave.mostrar();
     nave.mover();
 
-    // Disparos
+    // Actualizar disparos jugador
     for (let i = disparos.length - 1; i >= 0; i--) {
       disparos[i].mover();
       disparos[i].mostrar();
@@ -31,37 +36,78 @@ function draw() {
       }
     }
 
-    // Enemigos
-    for (let i = enemigos.length - 1; i >= 0; i--) {
-      enemigos[i].mover();
-      enemigos[i].mostrar();
-
-      // Colisión con disparos
-      for (let j = disparos.length - 1; j >= 0; j--) {
-        if (enemigos[i].colision(disparos[j])) {
-          enemigos.splice(i, 1);
-          disparos.splice(j, 1);
-          puntaje += 1;
-          break;
-        }
+    // Actualizar disparos enemigos
+    for (let i = disparosEnemigos.length - 1; i >= 0; i--) {
+      disparosEnemigos[i].mover();
+      disparosEnemigos[i].mostrar();
+      if (disparosEnemigos[i].fueraDePantalla()) {
+        disparosEnemigos.splice(i, 1);
+        continue;
       }
-
-      // Colisión con nave o fondo
-      if (enemigos[i] && enemigos[i].y > height - 60) {
-        enemigos.splice(i, 1);
-        vidas -= 1;
-        if (vidas <= 0) juegoTerminado = true;
-      } else if (enemigos[i] && enemigos[i].colisionConNave(nave)) {
-        enemigos.splice(i, 1);
-        vidas -= 1;
+      // Colisión disparo enemigo con nave
+      if (disparosEnemigos[i].colisionConNave(nave)) {
+        disparosEnemigos.splice(i, 1);
+        vidas--;
         if (vidas <= 0) juegoTerminado = true;
       }
     }
 
-    // Verificar si se terminó el nivel
-    if (enemigos.length === 0) {
-      mostrandoTransicion = true;
-      tiempoTransicion = millis();
+    // Actualizar enemigos
+    for (let i = enemigos.length - 1; i >= 0; i--) {
+      enemigos[i].mover();
+      enemigos[i].mostrar();
+
+      // Colisión enemigo con disparos jugador
+      let enemigoDestruido = false;
+      for (let j = disparos.length - 1; j >= 0; j--) {
+        if (enemigos[i].colision(disparos[j])) {
+          disparos.splice(j, 1);
+          enemigos[i].recibirImpacto();
+          if (enemigos[i].vida <= 0) {
+            puntaje += enemigos[i].puntaje;
+            enemigos.splice(i, 1);
+            enemigoDestruido = true;
+          }
+          break;
+        }
+      }
+      if (enemigoDestruido) continue;
+
+      // Colisión enemigo con nave
+      if (enemigos[i] && enemigos[i].colisionConNave(nave)) {
+        enemigos.splice(i, 1);
+        vidas--;
+        if (vidas <= 0) juegoTerminado = true;
+        continue;
+      }
+
+      // Enemigo llega al fondo de pantalla
+      if (enemigos[i] && enemigos[i].y > height - 60) {
+        enemigos.splice(i, 1);
+        vidas--;
+        if (vidas <= 0) juegoTerminado = true;
+        continue;
+      }
+
+      // Disparos enemigos (solo niveles > 1)
+      if (nivel > 1 && enemigos[i] && enemigos[i].puedeDisparar && random(1) < 0.005) {
+        disparosEnemigos.push(new DisparoEnemigo(enemigos[i].x, enemigos[i].y + enemigos[i].tam / 2));
+      }
+    }
+
+    // Comprobar final de nivel o aparición jefe
+    if (enemigos.length === 0 && vidas > 0) {
+        if (nivel === 3 && !jefeGenerado) {
+            // Generar jefe solo una vez, después de eliminar enemigos regulares
+            let jefe = new Enemigo(width / 2, 80, 'jefe');
+            jefe.movimientoTipo = 'complejo';
+            jefe.puedeDisparar = true;
+            enemigos.push(jefe);
+            jefeGenerado = true;
+        } else {
+            mostrandoTransicion = true;
+            tiempoTransicion = millis();
+        }
     }
   }
 
@@ -72,8 +118,15 @@ function draw() {
   text(`Vidas: ${vidas}`, 20, 60);
   text(`Nivel: ${nivel}`, 20, 90);
 
+  // Mostrar Top 5 puntajes
+  textSize(16);
+  text("Top 5 Puntajes:", width - 160, 30);
+  for (let i = 0; i < top5.length; i++) {
+    text(`${i + 1}. ${top5[i]} pts`, width - 160, 55 + i * 20);
+  }
+
   // Transición entre niveles
-  if (mostrandoTransicion) {
+  if (mostrandoTransicion && !juegoTerminado) {
     textAlign(CENTER);
     textSize(32);
     fill(0, 255, 0);
@@ -81,26 +134,40 @@ function draw() {
 
     if (millis() - tiempoTransicion > 2000) {
       nivel++;
-      if (nivel === 2) {
-        generarEnemigosNivel2();
+      if (nivel > 3) {
+        juegoTerminado = true;
+      } else {
+        iniciarNivel(nivel);
       }
       mostrandoTransicion = false;
     }
+    textAlign(LEFT);
   }
 
-  // Fin del juego
+  // Mostrar pantalla de fin de juego
   if (juegoTerminado) {
+    push();  // Guardar estado gráfico
     textAlign(CENTER);
     textSize(40);
     fill(255, 0, 0);
     text("¡Juego Terminado!", width / 2, height / 2);
-  }
+    pop();   // Restaurar estado previo (alineación, fill, etc)
+    
+    // Guardar puntaje solo una vez
+    if (!localStorage.getItem("puntajeGuardado")) {
+        guardarPuntaje(puntaje);
+        localStorage.setItem("puntajeGuardado", "true");
+    }
+    }
 }
 
+// Control de teclas
 function keyPressed() {
-  if (key === 'a' || key === 'A') nave.direccion = -1;
-  if (key === 'd' || key === 'D') nave.direccion = 1;
-  if (key === ' ') disparos.push(new Disparo(nave.x, nave.y));
+  if (!juegoTerminado) {
+    if (key === 'a' || key === 'A') nave.direccion = -1;
+    if (key === 'd' || key === 'D') nave.direccion = 1;
+    if (key === ' ') disparos.push(new Disparo(nave.x, nave.y));
+  }
 }
 
 function keyReleased() {
@@ -123,7 +190,7 @@ class Nave {
   }
 
   mover() {
-    this.x += this.direccion * 5;
+    this.x += this.direccion * 7;
     this.x = constrain(this.x, 20, width - 20);
   }
 }
@@ -132,7 +199,7 @@ class Disparo {
   constructor(x, y) {
     this.x = x;
     this.y = y;
-    this.vel = 7;
+    this.vel = 10;
   }
 
   mostrar() {
@@ -149,21 +216,93 @@ class Disparo {
   }
 }
 
-class Enemigo {
+class DisparoEnemigo {
   constructor(x, y) {
     this.x = x;
     this.y = y;
-    this.tam = 40;
-    this.vel = 1;
+    this.vel = 6;
   }
 
   mostrar() {
-    fill(255, 204, 0);
-    rect(this.x - this.tam / 2, this.y - this.tam / 2, this.tam, this.tam);
+    fill(0, 255, 0);
+    rect(this.x - 2, this.y, 4, 15);
   }
 
   mover() {
     this.y += this.vel;
+  }
+
+  fueraDePantalla() {
+    return this.y > height;
+  }
+
+  colisionConNave(nave) {
+    let d = dist(this.x, this.y, nave.x, nave.y);
+    return d < 15;
+  }
+}
+
+class Enemigo {
+  constructor(x, y, tipo = 'normal') {
+    this.x = x;
+    this.y = y;
+    this.tam = 40;
+    this.vel = 1;
+    this.tipo = tipo;
+    this.vida = 1;
+    this.puntaje = 1;
+    this.puedeDisparar = false;
+    this.movimientoTipo = 'recto'; // 'recto', 'zigzag', 'complejo'
+    this.zigzagDir = 1;
+    this.zigzagAmplitude = 40;
+    this.zigzagSpeed = 0.05;
+    this.zigzagAngle = 0;
+
+    if (tipo === 'resistente') {
+      this.vida = 3;
+      this.puntaje = 3;
+      this.puedeDisparar = true;
+    } else if (tipo === 'jefe') {
+      this.vida = 7;
+      this.puntaje = 10;
+      this.vel = 2;
+    }
+
+    if (tipo === 'dispara') {
+      this.puedeDisparar = true;
+    }
+  }
+
+  mostrar() {
+    if (this.tipo === 'jefe') {
+      fill(255, 0, 255);
+    } else if (this.tipo === 'resistente') {
+      fill(255, 100, 0);
+    } else {
+      fill(255, 204, 0);
+    }
+    rect(this.x - this.tam / 2, this.y - this.tam / 2, this.tam, this.tam);
+
+    // Mostrar barras de vida encima del enemigo
+    fill(255, 0, 0);
+    for (let i = 0; i < this.vida; i++) {
+      rect(this.x - this.tam / 2 + i * 14, this.y - this.tam / 2 - 10, 10, 5);
+    }
+  }
+
+  mover() {
+    if (this.movimientoTipo === 'recto') {
+      this.y += this.vel;
+    } else if (this.movimientoTipo === 'zigzag') {
+      this.y += this.vel;
+      this.zigzagAngle += this.zigzagSpeed;
+      this.x += sin(this.zigzagAngle) * 2;
+    } else if (this.movimientoTipo === 'complejo') {
+      this.y += this.vel;
+      this.zigzagAngle += this.zigzagSpeed * 2;
+      this.x += sin(this.zigzagAngle) * 4;
+    }
+    this.x = constrain(this.x, this.tam / 2, width - this.tam / 2);
   }
 
   colision(disparo) {
@@ -177,26 +316,76 @@ class Enemigo {
 
   colisionConNave(nave) {
     let d = dist(this.x, this.y, nave.x, nave.y);
-    return d < this.tam / 2 + 20;
+    return d < this.tam / 2 + 15;
+  }
+
+  recibirImpacto() {
+    this.vida--;
   }
 }
 
-// --- Funciones para generar enemigos por nivel ---
-
-function generarEnemigosNivel1() {
+// Función para iniciar el nivel con enemigos
+function iniciarNivel(nivel) {
+  disparos = [];
+  disparosEnemigos = [];
   enemigos = [];
-  for (let i = 0; i < 10; i++) {
-    let x = 60 + i * 50;
-    let y = 60;
-    enemigos.push(new Enemigo(x, y));
+  mostrandoTransicion = false;
+  jefeGenerado = false;  // Resetear variable jefe al iniciar nivel 3
+
+  if (nivel === 1) {
+    // Solo enemigos normales, movimiento recto, sin disparos enemigos
+    for (let i = 0; i < 6; i++) {
+      for (let j = 0; j < 3; j++) {
+        let enemigo = new Enemigo(80 + i * 80, 60 + j * 60);
+        enemigo.movimientoTipo = 'recto';
+        enemigos.push(enemigo);
+      }
+    }
+  } else if (nivel === 2) {
+    // Añadir enemigos zigzag y que disparan
+    for (let i = 0; i < 5; i++) {
+      let enemigo = new Enemigo(100 + i * 100, 50, 'dispara');
+      enemigo.movimientoTipo = 'zigzag';
+      enemigos.push(enemigo);
+    }
+    for (let i = 0; i < 4 ; i++) {
+      let enemigo = new Enemigo(120 + i * 120, 120, 'resistente');
+      enemigo.movimientoTipo = 'recto';
+      enemigos.push(enemigo);
+    }
+  } else if (nivel === 3) {
+    // Solo enemigos normales y resistentes, sin jefe aún
+    for (let i = 0; i < 4; i++) {
+      let enemigo = new Enemigo(120 + i * 120, 150, 'resistente');
+      enemigo.movimientoTipo = 'zigzag';
+      enemigos.push(enemigo);
+    }
+    for (let i = 0; i < 6; i++) {
+      let enemigo = new Enemigo(100 + i * 100, 50, 'dispara');
+      enemigo.movimientoTipo = 'recto';
+      enemigos.push(enemigo);
+    }
   }
 }
 
-function generarEnemigosNivel2() {
-  enemigos = [];
-  for (let i = 0; i < 12; i++) {
-    let x = 40 + (i % 6) * 80;
-    let y = 60 + floor(i / 6) * 80;
-    enemigos.push(new Enemigo(x, y));
+// --- Puntajes Top 5 ---
+
+function cargarTop5() {
+  let stored = localStorage.getItem("top5");
+  if (stored) {
+    top5 = JSON.parse(stored);
+  } else {
+    top5 = [];
   }
 }
+
+function guardarPuntaje(puntajeActual) {
+  top5.push(puntajeActual);
+  top5.sort((a, b) => b - a);
+  if (top5.length > 5) {
+    top5.pop();
+  }
+  localStorage.setItem("top5", JSON.stringify(top5));
+}
+
+// Nota: el almacenamiento del puntaje se hace solo una vez al terminar el juego
