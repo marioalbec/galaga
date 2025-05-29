@@ -131,10 +131,18 @@ function draw() {
     textAlign(CENTER);
     textSize(32);
     fill(0, 255, 0);
-    text(`¡Nivel ${nivel + 1}!`, width / 2, height / 2);
-
+    if(!jefeGenerado) {
+      text(`¡Nivel ${nivel + 1}!`, width / 2, height / 2);
+    } else {
+        text(`¡Ganaste!`, width / 2, height / 2);
+    }
     if (millis() - tiempoTransicion > 2000) {
-      nivel++;
+      if(!jefeGenerado) {
+        nivel++;
+      }
+      else {
+        juegoTerminado = true;
+      }
       if (nivel > 3) {
         juegoTerminado = true;
       } else {
@@ -261,7 +269,6 @@ class Enemigo {
     if (tipo === 'resistente') {
       this.vida = 3;
       this.puntaje = 3;
-      this.puedeDisparar = true;
     } else if (tipo === 'jefe') {
       this.vida = 7;
       this.puntaje = 10;
@@ -358,6 +365,7 @@ function iniciarNivel(nivel) {
     for (let i = 0; i < 4; i++) {
       let enemigo = new Enemigo(120 + i * 120, 150, 'resistente');
       enemigo.movimientoTipo = 'zigzag';
+      enemigo.puedeDisparar = true;
       enemigos.push(enemigo);
     }
     for (let i = 0; i < 6; i++) {
@@ -398,6 +406,3 @@ function actualizarTop5(puntajeActual) {
 
   localStorage.setItem("top5", JSON.stringify(top5));
 }
-
-
-// Nota: el almacenamiento del puntaje se hace solo una vez al terminar el juego
