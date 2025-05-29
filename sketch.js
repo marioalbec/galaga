@@ -8,6 +8,7 @@ let vidas = 3;
 let nivel = 1;
 let jefeGenerado = false;
 let juegoTerminado = false;
+let top5Actualizado = false;
 let mostrandoTransicion = false;
 let tiempoTransicion = 0;
 let top5 = [];
@@ -152,11 +153,10 @@ function draw() {
     fill(255, 0, 0);
     text("¡Juego Terminado!", width / 2, height / 2);
     pop();   // Restaurar estado previo (alineación, fill, etc)
-    
-    // Guardar puntaje solo una vez
-    if (!localStorage.getItem("puntajeGuardado")) {
-        guardarPuntaje(puntaje);
-        localStorage.setItem("puntajeGuardado", "true");
+    // Solo actualizar top 5 una vez
+    if (!top5Actualizado) {
+      actualizarTop5(puntaje);
+      top5Actualizado = true;
     }
     }
 }
@@ -368,24 +368,36 @@ function iniciarNivel(nivel) {
   }
 }
 
-// --- Puntajes Top 5 ---
-
 function cargarTop5() {
-  let stored = localStorage.getItem("top5");
-  if (stored) {
-    top5 = JSON.parse(stored);
-  } else {
-    top5 = [];
-  }
+  const stored = localStorage.getItem("top5");
+  top5 = stored ? JSON.parse(stored) : [];
 }
 
-function guardarPuntaje(puntajeActual) {
-  top5.push(puntajeActual);
-  top5.sort((a, b) => b - a);
-  if (top5.length > 5) {
-    top5.pop();
+function actualizarTop5(puntajeActual) {
+  cargarTop5();
+
+  // Si hay menos de 5, insertamos y ordenamos
+  if (top5.length < 5) {
+    top5.push(puntajeActual);
+  } else {
+    // Solo insertamos si el puntaje actual es mayor que alguno
+    const menor = top5[top5.length - 1];
+    if (puntajeActual > menor) {
+      top5.push(puntajeActual);
+    } else {
+      // No es mayor que ninguno del top5, no se agrega
+      return;
+    }
   }
+
+  // Ordenar descendente
+  top5.sort((a, b) => b - a);
+
+  // Mantener solo los 5 mejores
+  top5 = top5.slice(0, 5);
+
   localStorage.setItem("top5", JSON.stringify(top5));
 }
+
 
 // Nota: el almacenamiento del puntaje se hace solo una vez al terminar el juego
