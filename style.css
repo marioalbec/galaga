@@ -1,0 +1,9 @@
+body {
+  margin: 0;
+  background: black url('https://cdn.pixabay.com/photo/2016/11/29/05/12/star-1869336_960_720.png') repeat;
+  background-size: 100px 100px; /* Tamaño de las estrellas */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
